@@ -43,7 +43,7 @@ class VT100Player(object):
     CLEARSCRN = ESC + "[2J"  # Clear entire screen
     CLEARDOWN = ESC + "[J"  # Clear screen from cursor down
 
-    def __init__(self, movie):
+    def __init__(self, movie, state):
         """
         Player class plays a movie.
         It also stores the current position.
@@ -54,7 +54,7 @@ class VT100Player(object):
 
         """
         self._movie = movie
-        self._cursor = 0  # virtual cursor pointing to the current frame
+        self._cursor = state['cursor']  # virtual cursor pointing to the current frame
         self._frame_count = 0
 
         self._stopped = False
@@ -66,17 +66,20 @@ class VT100Player(object):
 
         self.timebar = TimeBar(self._frame_count, self._movie.screen_width)
 
-    def play(self):
+    def play(self, state):
         """
         Plays the movie
         """
         self._stopped = False
-        for frame in self._movie.frames:
+        for i, frame in enumerate(self._movie.frames):
             if self._stopped:
                 return
             self._cursor += frame.display_time
-            self._load_frame(frame, self._cursor)
-            time.sleep(frame.display_time / 15)
+            if i >= state['frame']:
+                state['cursor'] = self._cursor
+                state['frame'] = i
+                self._load_frame(frame, self._cursor)
+                time.sleep(frame.display_time / 15)
 
     def stop(self):
         """
@@ -94,16 +97,12 @@ class VT100Player(object):
 
         """
         screenbuf = BytesIO()
-        if not self._clear_screen_setup_done:
-            screenbuf.write(self.CLEARSCRN.encode())
-            self._clear_screen_setup_done = True
 
         # center vertical, with respect to the time bar (like letter boxing)
-        screenbuf.write(self._move_cursor(1, self._movie.top_margin))
+        screenbuf.write("!start!\r\n".encode())
         for line in frame.data:
             screenbuf.write((line + "\r\n").encode())
-
-        self._update_timebar(screenbuf, frame_pos)
+        screenbuf.write("!end!\r\n".encode())
 
         # now rewind the internal buffer and fire the public event
         screenbuf.seek(0)

@@ -43,6 +43,7 @@ except ImportError:  # Py2
 class ThreadedTCPServer(ThreadingMixIn, TCPServer):
     daemon_threads = True
 
+_state = {'cursor': 0, 'frame': 0}
 
 class TelnetRequestHandler(StreamRequestHandler):
     """
@@ -53,12 +54,13 @@ class TelnetRequestHandler(StreamRequestHandler):
     filename = None  # filename is set once, so it's immutable and safe for multi threading
 
     def handle(self):
+        global _state
         movie = Movie()
         movie.load(TelnetRequestHandler.filename)
 
-        self.player = VT100Player(movie)
+        self.player = VT100Player(movie, _state)
         self.player.draw_frame = self.draw_frame
-        self.player.play()
+        self.player.play(_state)
 
     def draw_frame(self, screen_buffer):
         """
@@ -68,5 +70,4 @@ class TelnetRequestHandler(StreamRequestHandler):
             self.wfile.write(screen_buffer.read())
         except socket.error as e:
             if e.errno == errno.EPIPE:
-                print("Client Disconnected.")
-                self.player.stop()
+                pass
